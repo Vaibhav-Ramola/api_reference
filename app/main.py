@@ -1,17 +1,20 @@
+import curses
 from dataclasses import dataclass
+from http.client import HTTPException
 from multiprocessing import connection
 from typing import Optional
-from fastapi import Body, FastAPI
+from fastapi import Body, FastAPI, status
 from pydantic import BaseModel
 import psycopg2
 from psycopg2.extras import RealDictCursor          # important, otherwise the library won't give column names only values from the table
 import time
+from fastapi import HTTPException
 
 
 class Post(BaseModel):              # will check if the post request has all these fields or not if not will through error automatucally
     title: str
-    body: str
-    publish: bool = True            # default value set to True
+    content: str
+    published: bool = True            # default value set to True
     rating: Optional[int] = None    # a completely optional field of type int, defaults to a value of none
 
 
@@ -33,13 +36,50 @@ app = FastAPI()
 async def root():
     return {"message": "Welcome to my api"}
 
-@app.get('/post')
+@app.get('/posts')          # decorator to fetch data from the database
 async def post():
-    return {"message": "This is your get reuqest for post"}
+    cursor.execute('SELECT * FROM posts')
+    posts = cursor.fetchall()
+    print(posts)
+    return posts
 
-@app.post('/')
+@app.post('/posts')              # decorator to post data to the database
 async def post_request(payload: Post):          # payload is stored as a pydantic model
-    print(payload)
+    # the 'RETURNING *' query at the end of the query statement is important or the server throws error
+    cursor.execute('''INSERT INTO posts (title, content, published) VALUES (%s, %s, %s) RETURNING *''', (payload.title, payload.content, payload.published))          # Don't use string f-strings, prone to SQL-injections
+    post  = cursor.fetchone()
+    connection.commit()             # It's important to commit, to push all the changes to the database otherwise the changes won't be reflected in the database
+    print(post)
     # print(payload.dict())                     # Every pydantic model has a .dict() function to convert it to a dictionary
-    return {"message": f"This is the title of your post request : {payload.title}"}
+    return {"data": post}
 
+@app.get('/posts/{id}')
+async def get_post_by_id(id: int):
+    cursor.execute('''SELECT * FROM posts WHERE id = %s''', str(id))
+    post = cursor.fetchone()
+    print(post)
+    if not post:
+        # Raise an HTTP exception if the post is null and send the appropriate message
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'Could not find post with id : {id}')
+    return {'post_detail': post}
+
+@app.delete('/posts/{id}')          # decorator to delete data from database
+async def delete_post_by_id(id: int):
+    cursor.execute('''DELETE FROM posts WHERE id = %s RETURNING *''', (str(id),))       # That , in the format string is important
+    deleted_post = cursor.fetchone()
+    # Remember to commit the data to the database whenever making changes to the database
+    connection.commit()
+    # print(deleted_post)
+    if not deleted_post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'No post with id : {id} found')
+    return deleted_post
+
+@app.put('/posts/{id}')             # decorator to Update data in the database
+async def update_post_by_id(id: int, post: Post):
+    cursor.execute('''UPDATE posts SET title = %s, content = %s, publushed = %s WHERE id = %s RETURNING *''', (post.title, post.content, post.published, str(id)))
+    updated_post = cursor.fetchone()
+    connection.commit()
+    if not updated_post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f'Can not update post with id : {id}')
+
+    return {'post' : updated_post} 
