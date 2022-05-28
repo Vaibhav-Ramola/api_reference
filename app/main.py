@@ -1,14 +1,18 @@
-import curses
-from dataclasses import dataclass
 from http.client import HTTPException
 from multiprocessing import connection
 from typing import Optional
-from fastapi import Body, FastAPI, status
+from fastapi import Depends, FastAPI, status
 from pydantic import BaseModel
 import psycopg2
 from psycopg2.extras import RealDictCursor          # important, otherwise the library won't give column names only values from the table
 import time
 from fastapi import HTTPException
+from sqlalchemy.orm import Session                  # important
+from . import models
+from .database import engine, get_db
+
+
+models.Base.metadata.create_all(bind=engine)  # Binds the engine and creates the table
 
 
 class Post(BaseModel):              # will check if the post request has all these fields or not if not will through error automatucally
@@ -30,11 +34,17 @@ while True:         # An infinite loop to keep trying to connect to the database
         print(f'Error : {error}')
         time.sleep(2)       # if we fail to connect the keep trying with 2 sec delay
 
-app = FastAPI()
+
+app = FastAPI()             # Initializing the app
+
 
 @app.get('/')
 async def root():
     return {"message": "Welcome to my api"}
+
+@app.get('/sqlalchemy')
+def test_fun(db: Session = Depends(get_db)):
+    return {"test": "Success"}
 
 @app.get('/posts')          # decorator to fetch data from the database
 async def post():
