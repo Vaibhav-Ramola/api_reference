@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from fastapi import Depends, status, HTTPException
 from . import schemas
 from fastapi.security import OAuth2PasswordBearer
-
+from .config import settings
 oauth2_schema = OAuth2PasswordBearer(tokenUrl='login')
 
 # You need to provide:
@@ -11,17 +11,17 @@ oauth2_schema = OAuth2PasswordBearer(tokenUrl='login')
 # ALGORITHM
 # EXPIRATION_DATE
 
-SECRET_KEY = "43567RETYHU657Y@#$%^&*x@s$#d%$f^gVBYUN^%&gh456GHJIM567&(*&^%$dgg&^G"
-ALGORITHM = "HS256"
-EXPIRATION_TIME = 30            # In minutes
+SECRET_KEY = f'{settings.secret_key}'
+ALGORITHM = f'{settings.algorithm}'         # the algorithm that will be used
+EXPIRATION_TIME = f'{settings.access_token_expire_minutes}'            # In minutes
 
-def create_access_token(data: dict):
+def create_access_token(data: dict):            # function to create access token
     encode = data.copy()
     expiration_time = datetime.utcnow() + timedelta(minutes=30)
     
-    encode.update({"exp": expiration_time})
+    encode.update({"exp": expiration_time})   
     # Updates the payload with token expiration time
-    encoded = jwt.encode(encode, SECRET_KEY, algorithm=[ALGORITHM])
+    encoded = jwt.encode(encode, SECRET_KEY, algorithm=ALGORITHM)
     # Creates the token using the given SECRET_KEY and ALGORITHM
     return encoded
 

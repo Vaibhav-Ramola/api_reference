@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from fastapi import Depends, status, APIRouter
 from fastapi import HTTPException
 from sqlalchemy.orm import Session                  # important
@@ -21,19 +21,21 @@ def test_fun(db: Session = Depends(get_db)):
                                                     
 @router.get('/posts', response_model=List[schemas.Post])          # decorator to fetch data from the database
 # to receive list of Post types
-async def post(db:Session = Depends(get_db)):
+async def post(db:Session = Depends(get_db), limit:int = 10, skip:int = 0, search: Optional[str] = ''):  # Added limit query parameter
+    # query parameters are passsed as function arguments like above function
     # # Using SQL query
     # cursor.execute('SELECT * FROM posts')
     # posts = cursor.fetchall()
 
     #using  sqlalchemy
 
-    posts = db.query(models.Post).all()  # to generate query to fetch all table content
+    posts = db.query(models.Post).filter(models.Post.title.contains(search)).limit(limit).offset(skip).all()  # to generate query to fetch all table content
+    # added query parameters of         search                                  limit           skip
     print(posts)
     return posts
 
 @router.post('/posts', response_model=schemas.Post)              # decorator to post data to the database
-async def create_post(payload: schemas.PostBase, db:Session = Depends(get_db), user_id: int = Depends(oauth2.get_current_user)):          # payload is stored as a pydantic model
+async def create_post(payload: schemas.PostCreat, db:Session = Depends(get_db), user_id: schemas.TokenData = Depends(oauth2.get_current_user)):          # payload is stored as a pydantic model
     # # Using SQL query
 
     # # the 'RETURNING *' query at the end of the query statement is important or the server throws error
@@ -43,7 +45,7 @@ async def create_post(payload: schemas.PostBase, db:Session = Depends(get_db), u
     
     # created_post = models.Post(title=payload.title, content=payload.content, published=payload.published)       # new post created
     # An efficient routerroach
-    created_post = models.Post(**payload.dict())       # due to post being a pydantic model
+    created_post = models.Post(owner_id=user_id.id, **payload.dict())       # due to post being a pydantic model
     db.add(created_post)        # adding the post to database
     db.commit()                 # commiting the changes to database
     db.refresh(created_post)    # return the newly created and stores it in created_post
