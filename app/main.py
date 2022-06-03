@@ -5,6 +5,7 @@ from .database import engine
 from . import models
 from fastapi import FastAPI
 from .routers import post, user, auth, votes
+from fastapi.middleware.cors import CORSMiddleware
 
 models.Base.metadata.create_all(bind=engine)  # Binds the engine and creates the table
 
@@ -23,6 +24,16 @@ while True:         # An infinite loop to keep trying to connect to the database
 
 
 app = FastAPI()             # Initializing the app
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['*'], # means all doins can send request our api
+    # but it can be very specific like ['https://www.google.com', '...']
+    allow_credentials=True,
+    allow_methods=['*'],
+    allow_headers=['*'],
+)
+
 app.include_router(post.router)
 app.include_router(user.router)
 app.include_router(auth.router)
