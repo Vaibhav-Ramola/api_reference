@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session                  # important
 from .. import models, schemas, oauth2
 from ..database import get_db
+from sqlalchemy import func
 
 router = APIRouter()
 
@@ -19,8 +20,9 @@ def test_fun(db: Session = Depends(get_db)):
 
     return {"data": posts}                      
                                                     
-@router.get('/posts', response_model=List[schemas.Post])          # decorator to fetch data from the database
+# @router.get('/posts', response_model=List[schemas.Post])          # decorator to fetch data from the database
 # to receive list of Post types
+@router.get('/posts', response_model=List[schemas.PostOut])
 async def post(db:Session = Depends(get_db), limit:int = 10, skip:int = 0, search: Optional[str] = ''):  # Added limit query parameter
     # query parameters are passsed as function arguments like above function
     # # Using SQL query
@@ -31,8 +33,10 @@ async def post(db:Session = Depends(get_db), limit:int = 10, skip:int = 0, searc
 
     posts = db.query(models.Post).filter(models.Post.title.contains(search)).limit(limit).offset(skip).all()  # to generate query to fetch all table content
     # added query parameters of         search                                  limit           skip
+    results = db.query(models.Post, func.count(models.Vote.post_id).label('votes')).join(
+        models.Vote, models.Vote.post_id == models.Post.id, isouter=True).group_by(models.Post.id).all()
     print(posts)
-    return posts
+    return results
 
 @router.post('/posts', response_model=schemas.Post)              # decorator to post data to the database
 async def create_post(payload: schemas.PostCreat, db:Session = Depends(get_db), user_id: schemas.TokenData = Depends(oauth2.get_current_user)):          # payload is stored as a pydantic model
